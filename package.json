@@ -8,7 +8,8 @@
     "build": "tsc",
     "test": "jest",
     "dev": "ts-node-dev src/index.ts",
-    "example": "ts-node examples/example.ts"
+    "example": "ts-node examples/example.ts",
+    "demo": "ts-node examples/simple-usage.ts"
   },
   "keywords": ["ethereum", "staking", "deposit", "bls", "withdrawal", "typescript"],
   "author": "",

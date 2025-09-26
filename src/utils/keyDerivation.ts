@@ -10,8 +10,7 @@ const BLS_CURVE_ORDER = BigInt('524358751751261904794477405081859658376905525005
  * Following EIP-2333: https://eips.ethereum.org/EIPS/eip-2333
  */
 function deriveMasterSK(seed: Uint8Array): bigint {
-  const salt = new TextEncoder().encode('BLS-SIG-KEYGEN-SALT-');
-  return hkdfModR(seed, '', salt);
+  return hkdfModR(seed, new Uint8Array(0));
 }
 
 /**
@@ -24,27 +23,35 @@ function deriveChildSK(parentSK: bigint, index: number): bigint {
   }
   
   const lamportPK = parentSKToLamportPK(parentSK, index);
-  return hkdfModR(lamportPK, '');
+  return hkdfModR(lamportPK, new Uint8Array(0));
 }
 
 /**
  * HKDF-MOD-R as defined in EIP-2333
  */
-function hkdfModR(ikm: Uint8Array, keyInfo: string, salt?: Uint8Array): bigint {
+function hkdfModR(ikm: Uint8Array, keyInfo: Uint8Array): bigint {
   const L = 48; // ceil((3 * ceil(log2(r))) / 16)
-  let currentSalt = salt || new TextEncoder().encode('BLS-SIG-KEYGEN-SALT-');
+  let salt = new TextEncoder().encode('BLS-SIG-KEYGEN-SALT-');
   let SK = BigInt(0);
   
   while (SK === BigInt(0)) {
-    currentSalt = sha256(currentSalt);
+    salt = sha256(salt);
+    
+    // IKM + I2OSP(0, 1)
     const ikmWithPostfix = new Uint8Array(ikm.length + 1);
     ikmWithPostfix.set(ikm);
-    ikmWithPostfix[ikm.length] = 0x00; // I2OSP(0, 1)
+    ikmWithPostfix[ikm.length] = 0x00;
     
-    const info = new TextEncoder().encode(keyInfo + String(L));
-    const okm = hkdf(sha256, ikmWithPostfix, currentSalt, info, L);
+    // info = key_info + I2OSP(L, 2)
+    const info = new Uint8Array(keyInfo.length + 2);
+    info.set(keyInfo);
+    // L as 2-byte big-endian
+    info[keyInfo.length] = (L >> 8) & 0xff;
+    info[keyInfo.length + 1] = L & 0xff;
     
-    // Convert to big integer
+    const okm = hkdf(sha256, ikmWithPostfix, salt, info, L);
+    
+    // Convert to big integer (big-endian)
     let result = BigInt(0);
     for (let i = 0; i < okm.length; i++) {
       result = result * BigInt(256) + BigInt(okm[i]);
@@ -63,41 +70,70 @@ function parentSKToLamportPK(parentSK: bigint, index: number): Uint8Array {
   const view = new DataView(salt.buffer);
   view.setUint32(0, index, false); // big-endian
   
-  const ikm = new Uint8Array(32);
-  const skBytes = parentSK.toString(16).padStart(64, '0');
-  for (let i = 0; i < 32; i++) {
-    ikm[i] = parseInt(skBytes.substr(i * 2, 2), 16);
+  const ikm = bigintToBytes32(parentSK);
+  
+  // Generate lamport_0
+  const lamport0 = ikmToLamportSK(ikm, salt);
+  
+  // Generate lamport_1 with flipped bits
+  const notIkm = flipBits256(parentSK);
+  const notIkmBytes = bigintToBytes32(notIkm);
+  const lamport1 = ikmToLamportSK(notIkmBytes, salt);
+  
+  // Combine lamport SKs
+  const lamportSKs = [...lamport0, ...lamport1];
+  
+  // Generate lamport PKs by hashing each SK
+  const lamportPKs: Uint8Array[] = [];
+  for (const sk of lamportSKs) {
+    lamportPKs.push(sha256(sk));
   }
   
-  const lamportSK = ikmToLamportSK(ikm, salt);
-  
-  // Create Lamport PK
-  const lamportPK = new Uint8Array(32 * 255);
-  for (let i = 0; i < 255; i++) {
-    const hash = sha256(lamportSK[i]);
-    lamportPK.set(hash, i * 32);
+  // Compress by hashing all PKs together
+  const combined = new Uint8Array(lamportPKs.length * 32);
+  for (let i = 0; i < lamportPKs.length; i++) {
+    combined.set(lamportPKs[i], i * 32);
   }
   
-  // Compress Lamport PK
-  return sha256(lamportPK);
+  return sha256(combined);
 }
 
 /**
  * Convert IKM to Lamport secret key
  */
 function ikmToLamportSK(ikm: Uint8Array, salt: Uint8Array): Uint8Array[] {
-  const lamportSK: Uint8Array[] = [];
+  // Generate 255 * 32 = 8160 bytes using HKDF
+  const okm = hkdf(sha256, ikm, salt, new Uint8Array(0), 8160);
   
+  const lamportSK: Uint8Array[] = [];
   for (let i = 0; i < 255; i++) {
-    const info = new Uint8Array(2);
-    const view = new DataView(info.buffer);
-    view.setUint16(0, i, false); // big-endian
-    
-    const sk = hkdf(sha256, ikm, salt, info, 32);
+    const sk = okm.slice(i * 32, (i + 1) * 32);
     lamportSK.push(sk);
   }
   
   return lamportSK;
+}
+
+/**
+ * Flip all 256 bits of input
+ */
+function flipBits256(input: bigint): bigint {
+  return input ^ (BigInt(2) ** BigInt(256) - BigInt(1));
+}
+
+/**
+ * Convert bigint to 32-byte array (big-endian)
+ */
+function bigintToBytes32(value: bigint): Uint8Array {
+  const bytes = new Uint8Array(32);
+  let v = value;
+  
+  for (let i = 31; i >= 0; i--) {
+    bytes[i] = Number(v & BigInt(0xff));
+    v = v >> BigInt(8);
+  }
+  
+  return bytes;
 }
 
 /**
