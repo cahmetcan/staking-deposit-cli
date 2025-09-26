@@ -12,3 +12,9 @@ venv/
 *.egg
 __pycache__
 .DS_Store
+
+# TypeScript / Node.js
+node_modules/
+*.tsbuildinfo
+.npm
+.eslintcache

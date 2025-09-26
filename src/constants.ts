@@ -1,0 +1,41 @@
+// Constants from the Python implementation
+export const BLS_WITHDRAWAL_PREFIX = new Uint8Array([0x00]);
+export const ETH1_ADDRESS_WITHDRAWAL_PREFIX = new Uint8Array([0x01]);
+
+export const MIN_DEPOSIT_AMOUNT = 1000000000; // 1 ETH in Gwei
+export const MAX_DEPOSIT_AMOUNT = 32000000000; // 32 ETH in Gwei
+export const ETH2GWEI = 1000000000;
+
+export const DOMAIN_DEPOSIT = new Uint8Array([0x03, 0x00, 0x00, 0x00]);
+export const ZERO_BYTES32 = new Uint8Array(32);
+
+// EIP-2334 key derivation paths
+export const PURPOSE = '12381';
+export const COIN_TYPE = '3600';
+
+// Chain settings
+export interface ChainSetting {
+  NETWORK_NAME: string;
+  GENESIS_FORK_VERSION: Uint8Array;
+  GENESIS_VALIDATORS_ROOT: Uint8Array;
+}
+
+export const MainnetSetting: ChainSetting = {
+  NETWORK_NAME: 'mainnet',
+  GENESIS_FORK_VERSION: new Uint8Array([0x00, 0x00, 0x00, 0x00]),
+  GENESIS_VALIDATORS_ROOT: new Uint8Array([
+    0x4b, 0x36, 0x3d, 0xb9, 0x4e, 0x28, 0x61, 0x20, 0xd7, 0x6e, 0xb9, 0x05,
+    0x34, 0x0f, 0xdd, 0x4e, 0x54, 0xbf, 0xe9, 0xf0, 0x6b, 0xf3, 0x3f, 0xf6,
+    0xcf, 0x5a, 0xd2, 0x7f, 0x51, 0x1b, 0xfe, 0x95
+  ])
+};
+
+export const HoleskySetting: ChainSetting = {
+  NETWORK_NAME: 'holesky',
+  GENESIS_FORK_VERSION: new Uint8Array([0x01, 0x01, 0x70, 0x00]),
+  GENESIS_VALIDATORS_ROOT: new Uint8Array([
+    0x91, 0x43, 0xaa, 0x7c, 0x61, 0x5a, 0x7f, 0x71, 0x15, 0xe2, 0xb6, 0xaa,
+    0xc3, 0x19, 0xc0, 0x35, 0x29, 0xdf, 0x82, 0x42, 0xae, 0x70, 0x5f, 0xba,
+    0x9d, 0xf3, 0x9b, 0x79, 0xc5, 0x9f, 0xa8, 0xb1
+  ])
+};
